@@ -70,7 +70,9 @@ void plot_cities(Map *map, const City *city, int n, const int *route) {
         for (int j = 0; j < strlen(buf); j++) {
             const int x = get_x(get_city(city, i)) + j;
             const int y = get_y(get_city(city, i));
-            if (x < map->width) map->dot[x][y] = buf[j];
+            if (0 <= x && x < map->width && 0 <= y && y < map->height){
+                map->dot[x][y] = buf[j];
+            } 
         }
     }
 

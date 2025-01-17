@@ -30,12 +30,11 @@ int main(int argc, char**argv)
 
     // 訪れる順序を記録する配列を設定
     int *route = (int*)calloc(n, sizeof(int));
-    // 訪れた町を記録するフラグ
-    int *visited = (int*)calloc(n, sizeof(int));
 
-    const double d = solve(city,n,route,visited);
+    const Answer ans = solve(city, n);
+    memcpy(route, ans.route, sizeof(int) * n);
     plot_cities(map, city, n, route);
-    printf("total distance = %f\n", d);
+    printf("total distance = %f\n", ans.dist);
     for (int i = 0 ; i < n ; i++){
 	printf("%d -> ", route[i]);
     }
@@ -43,7 +42,6 @@ int main(int argc, char**argv)
 
     // 動的確保した環境ではfreeをする
     free(route);
-    free(visited);
     free(city);
     
     return 0;

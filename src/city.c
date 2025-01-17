@@ -10,9 +10,9 @@ struct city {
     int y;
 };
 
-double distance(const City *a, const City *b) {
-    const double dx = a->x - b->x;
-    const double dy = a->y - b->y;
+double distance(const City *city, int i, int j) {
+    const double dx = city[i].x - city[j].x;
+    const double dy = city[i].y - city[j].y;
     return sqrt(dx * dx + dy * dy);
 }
 

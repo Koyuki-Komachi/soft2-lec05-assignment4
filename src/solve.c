@@ -1,70 +1,119 @@
-#include "solve.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <stdbool.h>
+#include <time.h>
+#include "solve.h"
 #include "city.h"
-#include "map.h"
 
-double solve(const City *city, int n, int *route, int *visited) {
-    route[0] = 0;  // 循環した結果を避けるため、常に0番目からスタート
-    visited[0] = 1;
+#define NUM_INITIAL_SOLUTIONS 100
 
-    Answer ans = search(city, n, route, visited);
+static double calc_dist_diff(const City *city, int *route, int n, int i, int j) {
+    int prev_i = (i == 0) ? route[n-1] : route[i-1];
+    int next_i = (i == n-1) ? route[0] : route[i+1];
+    int prev_j = (j == 0) ? route[n-1] : route[j-1];
+    int next_j = (j == n-1) ? route[0] : route[j+1];
 
-    memcpy(route, ans.route, sizeof(int) * n);
-    free(ans.route);
-    return ans.dist;
+    double current = distance(city, route[i], prev_i) + 
+                     distance(city, route[i], next_i) +
+                     distance(city, route[j], prev_j) +
+                     distance(city, route[j], next_j);
+
+    double new_dist = distance(city, route[j], prev_i) +
+                      distance(city, route[j], next_i) +
+                      distance(city, route[i], prev_j) +
+                      distance(city, route[i], next_j);
+
+    return new_dist - current;
 }
 
-Answer search(const City *city, int n, int *route, int *visited) {
-    int start = 0;
-    // 訪問した個数を数える
-    for (int i = 1; i < n; i++) {
-        if (!route[i]) {
-            start = i;
+static double calc_total_distance(const City *city, int *route, int n) {
+    double sum = 0;
+    for (int i = 0; i < n; i++) {
+        int next = (i + 1) % n;
+        sum += distance(city, route[i], route[next]);
+    }
+    // デバッグ用
+    printf("%lf\n", sum);
+    return sum;
+}
+
+static void generate_initial_route(int *route, int n) {
+    for (int i = 0; i < n; i++) route[i] = i;
+    for (int i = n-1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        int temp = route[i];
+        route[i] = route[j];
+        route[j] = temp;
+    }
+}
+
+static Answer local_search(const City *city, int *initial_route, int n) {
+    int *current_route = (int *)malloc(sizeof(int) * n);
+    memcpy(current_route, initial_route, sizeof(int) * n);
+
+    double current_distance = calc_total_distance(city, current_route, n);
+    bool improved;
+
+    // デバッグ用
+    int iteration_count = 0;
+    const int MAX_ITER = 100000;
+
+    do {
+        improved = false;
+        double best_diff = 0.0;
+        int best_i = -1, best_j = -1;
+
+        for (int i = 0; i < n-1; i++) {
+            for (int j = i+1; j < n; j++) {
+                double diff = calc_dist_diff(city, current_route, n, i, j);
+                if (diff < best_diff) {
+                    best_diff = diff;
+                    best_i = i;
+                    best_j = j;
+                }
+            }
+        }
+
+        if (best_i != -1 && best_j != -1) {
+            int temp = current_route[best_i];
+            current_route[best_i] = current_route[best_j];
+            current_route[best_j] = temp;
+            current_distance += best_diff;
+            improved = true;
+        }
+
+        // デバッグ用
+        iteration_count++;
+        if (iteration_count > MAX_ITER) {
+            fprintf(stderr, "Too many iterations!\n");
             break;
         }
-    }
-    // 全て訪問したケース（ここが再帰の終端条件）
-    if (start == 0) {
-        double sum_d = 0;
-        for (int i = 0; i < n; i++) {
-            const int c0 = route[i];
-            const int c1 = route[(i + 1) % n];  // nは0に戻る
-            sum_d += distance(get_city(city, c0), get_city(city, c1));
+    } while (improved);
+
+    Answer ans = {current_distance, current_route};
+    return ans;
+}
+
+Answer solve(const City *city, int n) {
+    srand(time(NULL));
+    Answer best_answer = {1e5, NULL};
+
+    for (int i = 0; i < NUM_INITIAL_SOLUTIONS; i++) {
+        int *initial_route = (int *)malloc(sizeof(int) * n);
+        generate_initial_route(initial_route, n);
+
+        Answer local_best = local_search(city, initial_route, n);
+
+        if (local_best.dist < best_answer.dist) {
+            if (best_answer.route != NULL) free(best_answer.route);
+            best_answer = local_best;
+        } else {
+            free(local_best.route);
         }
-        int *retarg = (int *)malloc(sizeof(int) * n);
-        memcpy(retarg, route, sizeof(int) * n);
 
-        return (Answer){.dist = sum_d, .route = retarg};
+        free(initial_route);
     }
 
-    // 特定の分岐における最小の巡回経路を調べる
-    Answer min = {.dist = 10000000000, .route = NULL};
-    for (int i = 1; i < n; i++) {
-        // 未訪問なら訪れる
-        if (!visited[i]) {
-            if (i == 2 && !visited[1]) continue;  // 逆順の巡回経路を抑制
-
-            route[start] = i;
-            visited[i] = 1;
-
-            Answer tmp = search(city, n, route, visited);
-
-            // 最小の巡回経路かどうか確認
-            if (tmp.dist < min.dist) {
-                free(min.route);
-                min = tmp;
-            } else {
-                free(tmp.route);
-            }
-
-            route[start] = 0;
-            visited[i] = 0;
-        }
-    }
-
-    return min;
+    return best_answer;
 }
